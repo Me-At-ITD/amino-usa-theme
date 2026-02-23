@@ -70,6 +70,16 @@
   background: #005a87;
 }
 
+.lb-pen, .lb-pen * {
+  position: absolute;
+  z-index: 99999 !important;
+  pointer-events: auto !important;
+}
+
+.lb-block, .lb-builder-wrapper, .lb-edit-wrapper {
+  position: relative;
+}
+
 
 
 

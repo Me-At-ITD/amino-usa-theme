@@ -416,6 +416,11 @@ console.log('REST API endpoint:', REST_ROOT);
 
     const root = scope || document;
 
+    // Clear existing pencil buttons before re-attaching to avoid duplicates.
+    root.querySelectorAll('.lb-pen').forEach(el => {
+      el.remove();
+    });
+
     
 
     // Reset any existing pencil attachments in this scope
@@ -582,13 +587,19 @@ console.log('REST API endpoint:', REST_ROOT);
 
       if (el.tagName === 'A' || el.tagName === 'BUTTON') {
 
-        el.addEventListener('click', function(e){ 
+        if (!el.__lbClickBound) {
 
-          e.stopPropagation(); 
+          el.addEventListener('click', function(e){ 
 
-          openEditorModal(el); 
+            e.stopPropagation(); 
 
-        });
+            openEditorModal(el); 
+
+          });
+
+          el.__lbClickBound = true;
+
+        }
 
       }
 
@@ -990,7 +1001,14 @@ $(document).on('keydown', '#lb-editor-modal input, #lb-editor-modal textarea', f
 
     const $form = $('#lb-editor-form');
 
-    const newRichText = $form.find('[name="richtext"]').val();
+    let newRichText = $form.find('[name="richtext"]').val();
+    if (typeof tinymce !== 'undefined') {
+      const editor = tinymce.get('lb-richtext-editor');
+      if (editor) {
+        newRichText = editor.getContent();
+        editor.save();
+      }
+    }
 
     const newLink = $form.find('[name="link_url"]').val();
 
@@ -2708,6 +2726,7 @@ case 'bg-image-section':
    clone.find('.lb-tools, .lb-pen').remove();
 
    clone.find('[data-lb-pen-attached]').removeAttr('data-lb-pen-attached');
+  clone.find('[data-lb-click-bound]').removeAttr('data-lb-click-bound');
 
    clone.find('.lb-editable-wrap').each(function(){
 
@@ -2987,6 +3006,69 @@ case 'bg-image-section':
 
  }
 
+
+ let lbCanvasObserver = null;
+ let lbReinitInProgress = false;
+
+ function lbDebounce(fn, wait) {
+   let t;
+   return function() {
+     clearTimeout(t);
+     t = setTimeout(fn, wait || 80);
+   };
+ }
+
+ function builderInitAfterTemplates(root) {
+   const scope = root || $canvas.get(0);
+   if (!scope || lbReinitInProgress) return;
+
+   lbReinitInProgress = true;
+   try {
+     if (typeof initBgVideos === 'function') {
+       try { initBgVideos(scope); } catch (e) {}
+     }
+
+     if (typeof addPencils === 'function') {
+       addPencils(scope);
+     }
+   } finally {
+     setTimeout(function(){ lbReinitInProgress = false; }, 60);
+   }
+ }
+
+ function startBuilderObserver() {
+   const root = $canvas.get(0);
+   if (!root || typeof MutationObserver === 'undefined') return;
+
+   if (lbCanvasObserver) {
+     lbCanvasObserver.disconnect();
+   }
+
+   const reinit = lbDebounce(function() {
+     builderInitAfterTemplates(root);
+   }, 120);
+
+   lbCanvasObserver = new MutationObserver(function(mutations) {
+     if (lbReinitInProgress) return;
+
+     const shouldReinit = mutations.some(function(m) {
+       if (m.type === 'childList') return true;
+       return m.attributeName === 'class' || m.attributeName === 'style';
+     });
+
+     if (shouldReinit) {
+       reinit();
+     }
+   });
+
+   lbCanvasObserver.observe(root, {
+     childList: true,
+     subtree: true,
+     attributes: true,
+     attributeFilter: ['class', 'style']
+   });
+ }
+
  
 
  // Load template
@@ -3015,7 +3097,27 @@ case 'bg-image-section':
 
 
 
-       const temp = $('<div>').html(res.data.content);
+      const rawTemplateContent = (res && res.data && typeof res.data.content === 'string')
+        ? res.data.content
+        : '';
+
+      let temp = $('<div>').html(rawTemplateContent);
+
+      // Back-compat: recover templates that were stored as entity-encoded HTML.
+      if (!temp.children().length && rawTemplateContent.trim()) {
+        const decodedCandidate = $('<textarea/>').html(rawTemplateContent).text();
+        if (decodedCandidate && decodedCandidate !== rawTemplateContent) {
+          const decodedTemp = $('<div>').html(decodedCandidate);
+          if (decodedTemp.children().length) {
+            temp = decodedTemp;
+          }
+        }
+      }
+
+      // Keep editor usable even if content parses without element nodes.
+      if (!temp.children().length && rawTemplateContent.trim()) {
+        temp = $('<div>').append($('<section class="lb-section"></section>').html(rawTemplateContent));
+      }
 
        
 
@@ -3084,12 +3186,6 @@ case 'bg-image-section':
        // Check and hide empty elements
 
        checkAndHideEmptyElements($canvas[0]);
-
-       
-
-       // Add pencils to the entire canvas
-
-       addPencils($canvas.get(0));
 
        
 
@@ -3183,6 +3279,10 @@ case 'bg-image-section':
 
        initAccordions();
 
+      // Rebind edit handles only after template HTML has rendered.
+      builderInitAfterTemplates($canvas.get(0));
+      startBuilderObserver();
+
 
 
      } else {
@@ -3230,6 +3330,138 @@ case 'bg-image-section':
    }
 
  });
+
+ // ---- Builder debug instrumentation ----
+ (function(){
+  const DEBUG = true;
+  const tag = function(msg, data) {
+    if (!DEBUG) return;
+    console.log('%c[BUILDER DEBUG] ' + msg, 'color:#3b82f6;font-weight:bold;', data || '');
+  };
+
+  if (typeof addPencils === 'function') {
+    const _addPencils = addPencils;
+    addPencils = function(scope){
+      tag('Running addPencils', scope);
+      try {
+        const result = _addPencils.apply(this, arguments);
+        tag('addPencils complete');
+        return result;
+      } catch (e) {
+        console.error('[BUILDER DEBUG] addPencils error', e);
+        throw e;
+      }
+    };
+  } else {
+    tag('addPencils not defined yet');
+  }
+
+  if (typeof builderInitAfterTemplates === 'function') {
+    const _builderInitAfterTemplates = builderInitAfterTemplates;
+    builderInitAfterTemplates = function(){
+      tag('builderInitAfterTemplates called', arguments[0] || null);
+      try {
+        const result = _builderInitAfterTemplates.apply(this, arguments);
+        tag('builderInitAfterTemplates complete');
+        return result;
+      } catch (e) {
+        console.error('[BUILDER DEBUG] builderInitAfterTemplates error', e);
+        throw e;
+      }
+    };
+  } else {
+    tag('builderInitAfterTemplates not defined yet');
+  }
+
+  const getBuilderRoot = function() {
+    return document.querySelector('#builder-root')
+      || document.querySelector('.lb-builder-root')
+      || document.querySelector('#lb-canvas');
+  };
+
+  const logRoot = function() {
+    tag('Builder root:', getBuilderRoot());
+  };
+
+  if (document.readyState !== 'loading') {
+    tag('DOM loaded (readyState=' + document.readyState + ')');
+    logRoot();
+  } else {
+    document.addEventListener('DOMContentLoaded', function(){
+      tag('DOM loaded');
+      logRoot();
+    });
+  }
+
+  const rootNode = getBuilderRoot();
+  if (rootNode) {
+    const debugReinit = lbDebounce(function() {
+      if (typeof builderInitAfterTemplates === 'function') {
+        builderInitAfterTemplates(rootNode);
+      } else if (typeof addPencils === 'function') {
+        addPencils(rootNode);
+      }
+    }, 120);
+
+    new MutationObserver(function(mutations){
+      if (lbReinitInProgress) return;
+
+      const relevantMutation = mutations.some(function(m){
+        if (m.type === 'childList') {
+          const changedNodes = []
+            .concat(Array.from(m.addedNodes || []))
+            .concat(Array.from(m.removedNodes || []));
+          return changedNodes.some(function(node){
+            return node.nodeType === 1 && !(node.classList && node.classList.contains('lb-pen'));
+          });
+        }
+        return m.attributeName === 'class' || m.attributeName === 'style';
+      });
+
+      if (!relevantMutation) return;
+
+      tag('DOM mutation', mutations.length);
+      debugReinit();
+    }).observe(rootNode, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style']
+    });
+    tag('Observer attached', rootNode);
+  } else {
+    tag('Observer not attached: builder root not found');
+  }
+
+  if (window.jQuery) {
+    const getPayload = function(opt) {
+      if (!opt || typeof opt.data === 'undefined' || opt.data === null) return '';
+      if (typeof opt.data === 'string') return opt.data;
+      try { return JSON.stringify(opt.data); } catch (e) { return String(opt.data); }
+    };
+
+    jQuery(document).ajaxSend(function(e, xhr, opt){
+      const payload = getPayload(opt);
+      if (payload.includes('template') || payload.includes('lb_load_template') || payload.includes('lb_list_templates')) {
+        tag('AJAX send', payload);
+      }
+    });
+    jQuery(document).ajaxSuccess(function(e, xhr, opt){
+      const payload = getPayload(opt);
+      if (payload.includes('template') || payload.includes('lb_load_template') || payload.includes('lb_list_templates')) {
+        tag('AJAX success', payload);
+      }
+    });
+    jQuery(document).ajaxError(function(e, xhr, opt, err){
+      const payload = getPayload(opt);
+      if (payload.includes('template') || payload.includes('lb_load_template') || payload.includes('lb_list_templates')) {
+        console.error('[BUILDER DEBUG] AJAX error', opt, err);
+      }
+    });
+  }
+
+  tag('Builder debug script initialized');
+ })();
 
 });
 

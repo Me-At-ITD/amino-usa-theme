@@ -397,6 +397,87 @@ add_action('init', function() {
 
  */
 
+/**
+ * Sanitize builder template content while preserving edit markers.
+ *
+ * The editor rebind logic depends on custom data-* attributes (e.g. data-edit).
+ * Using wp_kses_post() alone can strip these attributes, which makes blocks
+ * render but non-editable after reload.
+ */
+function my_lb_sanitize_template_content($content) {
+    $allowed = wp_kses_allowed_html('post');
+
+    $builder_data_attrs = [
+        'data-edit',
+        'data-link',
+        'data-bg-image',
+        'data-bg-video',
+        'data-richtext-container',
+        'data-remove-if-empty',
+        'data-widget-type',
+        'data-posts-per-page',
+        'data-product-type',
+        'data-target',
+        'data-cf7-id',
+        'data-nonce',
+        'data-lb-builder-only',
+    ];
+
+    foreach ($allowed as $tag => $attrs) {
+        if (!is_array($attrs)) {
+            $allowed[$tag] = [];
+        }
+
+        // Keep wildcard + explicit attributes for broader WP compatibility.
+        $allowed[$tag]['data-*'] = true;
+        foreach ($builder_data_attrs as $attr) {
+            $allowed[$tag][$attr] = true;
+        }
+    }
+
+    // Ensure builder structure/media tags are preserved.
+    if (!isset($allowed['section']) || !is_array($allowed['section'])) {
+        $allowed['section'] = [];
+    }
+    $allowed['section']['class'] = true;
+    $allowed['section']['id'] = true;
+    $allowed['section']['style'] = true;
+    $allowed['section']['data-*'] = true;
+
+    if (!isset($allowed['video']) || !is_array($allowed['video'])) {
+        $allowed['video'] = [];
+    }
+    $allowed['video'] = array_merge($allowed['video'], [
+        'autoplay' => true,
+        'controls' => true,
+        'height' => true,
+        'loop' => true,
+        'muted' => true,
+        'playsinline' => true,
+        'poster' => true,
+        'preload' => true,
+        'src' => true,
+        'width' => true,
+        'class' => true,
+        'id' => true,
+        'style' => true,
+        'data-*' => true,
+    ]);
+
+    if (!isset($allowed['source']) || !is_array($allowed['source'])) {
+        $allowed['source'] = [];
+    }
+    $allowed['source'] = array_merge($allowed['source'], [
+        'src' => true,
+        'srcset' => true,
+        'sizes' => true,
+        'type' => true,
+        'media' => true,
+    ]);
+
+    return wp_kses($content, $allowed);
+}
+
 add_action('wp_ajax_lb_list_templates', function() {
 
     check_ajax_referer('lb_nonce', 'nonce');
@@ -445,9 +526,13 @@ add_action('wp_ajax_lb_save_template', function() {
 
     
 
-    $name = sanitize_text_field($_POST['name'] ?? '');
+    $name_raw = isset($_POST['name']) ? wp_unslash($_POST['name']) : '';
 
-    $content = wp_kses_post($_POST['content'] ?? '');
+    $content_raw = isset($_POST['content']) ? wp_unslash($_POST['content']) : '';
+
+    $name = sanitize_text_field($name_raw);
+
+    $content = my_lb_sanitize_template_content($content_raw);
 
     $maybe_id = isset($_POST['id']) ? absint($_POST['id']) : 0;
 
