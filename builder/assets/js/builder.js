@@ -624,6 +624,12 @@ console.log('REST API endpoint:', REST_ROOT);
 
   }
 
+  function isRichTextTarget(el) {
+
+    return !!(el && el.getAttribute && el.getAttribute('data-edit') === 'richtext');
+
+  }
+
 
 
   /**
@@ -691,10 +697,13 @@ console.log('REST API endpoint:', REST_ROOT);
   
 
     const shouldShowRichText = isTextEditableTarget(targetEl);
+    const richTextMode = isRichTextTarget(targetEl);
 
     if (shouldShowRichText) {
 
-      const currentContent = typeof targetEl.innerHTML === 'string' ? targetEl.innerHTML : '';
+      const currentContent = richTextMode
+        ? (typeof targetEl.innerHTML === 'string' ? targetEl.innerHTML : '')
+        : (targetEl.textContent || '');
       $('#lb-richtext-field').show();
       $form.find('[name="richtext"]').val(currentContent);
 
@@ -810,8 +819,8 @@ console.log('REST API endpoint:', REST_ROOT);
 
   
 
-    // Initialize TinyMCE only for text-editable targets.
-    if (shouldShowRichText) {
+    // Initialize TinyMCE only for richtext containers.
+    if (shouldShowRichText && richTextMode) {
 
       setTimeout(function() {
 
@@ -1036,9 +1045,10 @@ $(document).on('keydown', '#lb-editor-modal input, #lb-editor-modal textarea', f
     const $form = $('#lb-editor-form');
 
     const shouldApplyRichText = isTextEditableTarget(LB_CURRENT_TARGET);
+    const richTextMode = isRichTextTarget(LB_CURRENT_TARGET);
     let newRichText = $form.find('[name="richtext"]').val();
 
-    if (shouldApplyRichText && typeof tinymce !== 'undefined') {
+    if (shouldApplyRichText && richTextMode && typeof tinymce !== 'undefined') {
 
       const activeEditor = tinymce.get('lb-richtext-editor');
       if (activeEditor) {
@@ -1058,7 +1068,16 @@ $(document).on('keydown', '#lb-editor-modal input, #lb-editor-modal textarea', f
 
     if (shouldApplyRichText && typeof newRichText === 'string'){
 
-      LB_CURRENT_TARGET.innerHTML = newRichText;
+      if (richTextMode) {
+
+        LB_CURRENT_TARGET.innerHTML = newRichText;
+
+      } else {
+
+        // Keep "text" targets as plain text to avoid invalid nested HTML (e.g. <p> inside <h2>).
+        LB_CURRENT_TARGET.textContent = newRichText;
+
+      }
 
       LB_CURRENT_TARGET.style.display = '';
 
