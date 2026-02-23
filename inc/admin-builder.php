@@ -445,9 +445,13 @@ add_action('wp_ajax_lb_save_template', function() {
 
     
 
-    $name = sanitize_text_field($_POST['name'] ?? '');
+    $name_raw = isset($_POST['name']) ? wp_unslash($_POST['name']) : '';
 
-    $content = wp_kses_post($_POST['content'] ?? '');
+    $content_raw = isset($_POST['content']) ? wp_unslash($_POST['content']) : '';
+
+    $name = sanitize_text_field($name_raw);
+
+    $content = wp_kses_post($content_raw);
 
     $maybe_id = isset($_POST['id']) ? absint($_POST['id']) : 0;
 

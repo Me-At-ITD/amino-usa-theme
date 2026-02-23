@@ -990,7 +990,14 @@ $(document).on('keydown', '#lb-editor-modal input, #lb-editor-modal textarea', f
 
     const $form = $('#lb-editor-form');
 
-    const newRichText = $form.find('[name="richtext"]').val();
+    let newRichText = $form.find('[name="richtext"]').val();
+    if (typeof tinymce !== 'undefined') {
+      const editor = tinymce.get('lb-richtext-editor');
+      if (editor) {
+        newRichText = editor.getContent();
+        editor.save();
+      }
+    }
 
     const newLink = $form.find('[name="link_url"]').val();
 
