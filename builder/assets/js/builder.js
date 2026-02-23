@@ -602,6 +602,36 @@ console.log('REST API endpoint:', REST_ROOT);
 
 
 
+  function isTextEditableTarget(el) {
+
+    if (!el) return false;
+
+    const dataEdit = el.getAttribute && el.getAttribute('data-edit');
+
+    if (el.tagName === 'IMG' || el.tagName === 'VIDEO') {
+
+      return false;
+
+    }
+
+    if (dataEdit === 'bg' || dataEdit === 'bg-image' || dataEdit === 'bg-video' || dataEdit === 'video' || dataEdit === 'image') {
+
+      return false;
+
+    }
+
+    return true;
+
+  }
+
+  function isRichTextTarget(el) {
+
+    return !!(el && el.getAttribute && el.getAttribute('data-edit') === 'richtext');
+
+  }
+
+
+
   /**
 
  * Opens the editor modal for a target element
@@ -614,11 +644,31 @@ console.log('REST API endpoint:', REST_ROOT);
 
     console.log('Opening editor for:', targetEl);
 
+    if (!targetEl) {
+
+      return;
+
+    }
+
     LB_CURRENT_TARGET = targetEl;
 
     const $modal = $('#lb-editor-modal');
 
     const $form  = $('#lb-editor-form');
+
+    const hasTinyMce = (typeof tinymce !== 'undefined');
+
+    // Tear down any existing editor instance before setting fresh content.
+    if (hasTinyMce) {
+
+      const existingEditor = tinymce.get('lb-richtext-editor');
+      if (existingEditor) {
+
+        existingEditor.remove();
+
+      }
+
+    }
 
   
 
@@ -646,23 +696,22 @@ console.log('REST API endpoint:', REST_ROOT);
 
   
 
-    // Get the current content
+    const shouldShowRichText = isTextEditableTarget(targetEl);
+    const richTextMode = isRichTextTarget(targetEl);
 
-    let currentContent = '';
+    if (shouldShowRichText) {
 
-    if (targetEl) {
+      const currentContent = richTextMode
+        ? (typeof targetEl.innerHTML === 'string' ? targetEl.innerHTML : '')
+        : (targetEl.textContent || '');
+      $('#lb-richtext-field').show();
+      $form.find('[name="richtext"]').val(currentContent);
 
-      currentContent = targetEl.innerHTML;
+    } else {
+
+      $form.find('[name="richtext"]').val('');
 
     }
-
-    
-
-    // Always show the rich text field for all text editing
-
-    $('#lb-richtext-field').show();
-
-    $form.find('[name="richtext"]').val(currentContent);
 
   
 
@@ -770,13 +819,16 @@ console.log('REST API endpoint:', REST_ROOT);
 
   
 
-    // Initialize TinyMCE for rich text editing
+    // Initialize TinyMCE only for richtext containers.
+    if (shouldShowRichText && richTextMode) {
 
-    setTimeout(function() {
+      setTimeout(function() {
 
-      initTinyMCE();
+        initTinyMCE();
 
-    }, 100);
+      }, 100);
+
+    }
 
   
 
@@ -790,25 +842,27 @@ console.log('REST API endpoint:', REST_ROOT);
 
 function initTinyMCE() {
 
- // Remove any existing TinyMCE instances
+ const $editor = $('#lb-richtext-editor');
+ if (!$editor.length) {
 
- if (typeof tinymce !== 'undefined') {
-
-   tinymce.remove('#lb-richtext-editor');
+   return;
 
  }
 
- 
-
- // Get the current content
-
- const content = $('#lb-richtext-editor').val();
+ const content = $editor.val() || '';
 
  
 
  // Initialize TinyMCE if available
 
- if (typeof tinymce !== 'undefined' && $('#lb-richtext-editor').length) {
+ if (typeof tinymce !== 'undefined') {
+
+   const existingEditor = tinymce.get('lb-richtext-editor');
+   if (existingEditor) {
+
+     existingEditor.remove();
+
+   }
 
    tinymce.init({
 
@@ -840,7 +894,7 @@ function initTinyMCE() {
 
        
 
-       editor.on('change', function() {
+       editor.on('change keyup input undo redo', function() {
 
          editor.save();
 
@@ -990,7 +1044,21 @@ $(document).on('keydown', '#lb-editor-modal input, #lb-editor-modal textarea', f
 
     const $form = $('#lb-editor-form');
 
-    const newRichText = $form.find('[name="richtext"]').val();
+    const shouldApplyRichText = isTextEditableTarget(LB_CURRENT_TARGET);
+    const richTextMode = isRichTextTarget(LB_CURRENT_TARGET);
+    let newRichText = $form.find('[name="richtext"]').val();
+
+    if (shouldApplyRichText && richTextMode && typeof tinymce !== 'undefined') {
+
+      const activeEditor = tinymce.get('lb-richtext-editor');
+      if (activeEditor) {
+
+        newRichText = activeEditor.getContent();
+        activeEditor.save();
+
+      }
+
+    }
 
     const newLink = $form.find('[name="link_url"]').val();
 
@@ -998,9 +1066,18 @@ $(document).on('keydown', '#lb-editor-modal input, #lb-editor-modal textarea', f
 
     // Apply rich text content
 
-    if (typeof newRichText === 'string'){
+    if (shouldApplyRichText && typeof newRichText === 'string'){
 
-      LB_CURRENT_TARGET.innerHTML = newRichText;
+      if (richTextMode) {
+
+        LB_CURRENT_TARGET.innerHTML = newRichText;
+
+      } else {
+
+        // Keep "text" targets as plain text to avoid invalid nested HTML (e.g. <p> inside <h2>).
+        LB_CURRENT_TARGET.textContent = newRichText;
+
+      }
 
       LB_CURRENT_TARGET.style.display = '';
 
