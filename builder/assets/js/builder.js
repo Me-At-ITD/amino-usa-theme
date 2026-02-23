@@ -2883,6 +2883,11 @@ case 'bg-image-section':
  // Initialize template list
 
  listTemplates();
+ 
+ // Rebind edit markers if the canvas already contains markup (e.g. browser restore).
+ if ($canvas.children().length && !$canvas.find('.lb-pen').length) {
+   addPencils($canvas.get(0));
+ }
 
 
 
