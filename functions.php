@@ -26,6 +26,7 @@ add_action( 'after_setup_theme', function () {
 	// Wide/full for block editor
 	add_theme_support( 'align-wide' ); // Enable wide and full alignment in Gutenberg
 	add_theme_support( 'editor-styles' ); // Enable editor styles
+	add_editor_style( 'editor-style.css' ); // Load shared editor stylesheet
 
 	// WooCommerce support (optional but harmless)
 	add_theme_support( 'woocommerce' ); // Enable WooCommerce support

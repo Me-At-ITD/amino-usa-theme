@@ -301,44 +301,6 @@ function my_lb_builder_screen() {
 
  */
 
-add_action('admin_enqueue_scripts', function($hook) {
-
-    // Only load on our builder page
-
-    if ($hook !== 'appearance_page_lightbuilder') return;
-
-    
-
-    // Enqueue styles
-
-    wp_enqueue_style('lb-builder', get_template_directory_uri() . '/builder/assets/css/builder.css', [], '1.0.1');
-
-    
-
-    // Enqueue scripts
-
-    wp_enqueue_script('lb-builder', get_template_directory_uri() . '/builder/assets/js/builder.js', ['jquery'], '1.0.1', true);
-
-    
-
-    // Enable media uploader
-
-    wp_enqueue_media();
-
-    
-
-    // Localize script with AJAX URL and nonce
-
-    wp_localize_script('lb-builder', 'LB', [
-
-        'ajax' => admin_url('admin-ajax.php'),
-
-        'nonce' => wp_create_nonce('lb_nonce')
-
-    ]);
-
-});
-
 
 
 // =============================================
@@ -371,7 +333,7 @@ add_action('init', function() {
 
         'map_meta_cap' => true,
 
-        'supports' => ['title'], // minimal support
+        'supports' => ['title', 'editor', 'custom-fields'], // keep template content editable in WP UI
 
         'menu_icon' => 'dashicons-layout',
 
@@ -785,37 +747,42 @@ add_action('admin_enqueue_scripts', function($hook) {
 
     // Only load on our builder page
 
-    if ($hook !== 'appearance_page_lightbuilder') return;
+    if ($hook !== 'appearance_page_lightbuilder') {
 
-    
+        return;
 
-    // Enqueue styles
+    }
 
-    wp_enqueue_style('lb-builder', get_template_directory_uri() . '/builder/assets/css/builder.css', [], '1.0.1');
+    $style_path = get_template_directory() . '/builder/assets/css/builder.css';
+    $script_path = get_template_directory() . '/builder/assets/js/builder.js';
+    $style_ver = file_exists($style_path) ? (string) filemtime($style_path) : '1.0.1';
+    $script_ver = file_exists($script_path) ? (string) filemtime($script_path) : '1.0.1';
 
-    
-
-    // Enqueue scripts
-
-    wp_enqueue_script('lb-builder', get_template_directory_uri() . '/builder/assets/js/builder.js', ['jquery'], '1.0.1', true);
-
-    
-
-    // Enable media uploader and TinyMCE
-
+    // Ensure TinyMCE/editor assets are available before builder JS runs.
+    wp_enqueue_editor();
     wp_enqueue_media();
 
-    wp_enqueue_editor();
+    wp_enqueue_style(
+        'lb-builder',
+        get_template_directory_uri() . '/builder/assets/css/builder.css',
+        [],
+        $style_ver
+    );
 
-    
+    wp_enqueue_script(
+        'lb-builder',
+        get_template_directory_uri() . '/builder/assets/js/builder.js',
+        ['jquery', 'editor'],
+        $script_ver,
+        true
+    );
 
-    // Localize script with AJAX URL and nonce
-
+    // Localize script with AJAX/REST endpoints and nonce.
     wp_localize_script('lb-builder', 'LB', [
 
-        'ajax' => admin_url('admin-ajax.php'),
-
-        'nonce' => wp_create_nonce('lb_nonce')
+        'ajax'  => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('lb_nonce'),
+        'rest'  => esc_url_raw(rest_url()),
 
     ]);
 
