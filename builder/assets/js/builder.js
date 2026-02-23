@@ -416,6 +416,11 @@ console.log('REST API endpoint:', REST_ROOT);
 
     const root = scope || document;
 
+    // Clear existing pencil buttons before re-attaching to avoid duplicates.
+    root.querySelectorAll('.lb-pen').forEach(el => {
+      el.remove();
+    });
+
     
 
     // Reset any existing pencil attachments in this scope
@@ -582,13 +587,19 @@ console.log('REST API endpoint:', REST_ROOT);
 
       if (el.tagName === 'A' || el.tagName === 'BUTTON') {
 
-        el.addEventListener('click', function(e){ 
+        if (!el.hasAttribute('data-lb-click-bound')) {
 
-          e.stopPropagation(); 
+          el.addEventListener('click', function(e){ 
 
-          openEditorModal(el); 
+            e.stopPropagation(); 
 
-        });
+            openEditorModal(el); 
+
+          });
+
+          el.setAttribute('data-lb-click-bound', '1');
+
+        }
 
       }
 
@@ -2883,11 +2894,6 @@ case 'bg-image-section':
  // Initialize template list
 
  listTemplates();
- 
- // Rebind edit markers if the canvas already contains markup (e.g. browser restore).
- if ($canvas.children().length && !$canvas.find('.lb-pen').length) {
-   addPencils($canvas.get(0));
- }
 
 
 
@@ -3242,6 +3248,67 @@ case 'bg-image-section':
    }
 
  });
+
+ // Keep edit handles attached after reloads and dynamic class/content updates.
+ (function(){
+  const builderApp = document.getElementById('lb-app');
+  if (!builderApp) return;
+
+  function debounce(fn,wait){let t;return function(){clearTimeout(t);t=setTimeout(fn,wait||80)}}
+
+  let isRebinding = false;
+  function lbSafeInit(root){
+    if(typeof addPencils !== 'function' || isRebinding) return;
+    isRebinding = true;
+    try {
+      addPencils(root || document);
+    } finally {
+      setTimeout(function(){ isRebinding = false; }, 0);
+    }
+  }
+
+  function bootInit(){
+    lbSafeInit(document.querySelector('#lb-canvas') || document);
+  }
+
+  if(document.readyState!=='loading'){ bootInit(); }
+  else document.addEventListener('DOMContentLoaded', function(){ bootInit(); });
+
+  if(window.jQuery) jQuery(document).ready(function(){ bootInit(); });
+
+  const roots = Array.from(new Set([
+    document.querySelector('#lb-canvas'),
+    document.querySelector('.lb-builder-root'),
+    document.querySelector('main'),
+    document.body
+  ].filter(Boolean)));
+
+  roots.forEach(function(root){
+    const reinit = debounce(function(){ lbSafeInit(root); }, 120);
+    new MutationObserver(function(mutations){
+      if (isRebinding) return;
+
+      const shouldReinit = mutations.some(function(x){
+        if (x.type === 'childList') {
+          const nodes = []
+            .concat(Array.from(x.addedNodes || []))
+            .concat(Array.from(x.removedNodes || []));
+          return nodes.some(function(n){
+            return n.nodeType === 1 && !(n.classList && n.classList.contains('lb-pen'));
+          });
+        }
+        return x.attributeName === 'class' || x.attributeName === 'style';
+      });
+
+      if (shouldReinit) reinit();
+    }).observe(root,{
+      childList:true,
+      subtree:true,
+      attributes:true,
+      attributeFilter:['class','style']
+    });
+  });
+ })();
 
 });
 
