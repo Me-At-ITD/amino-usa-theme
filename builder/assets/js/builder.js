@@ -587,7 +587,7 @@ console.log('REST API endpoint:', REST_ROOT);
 
       if (el.tagName === 'A' || el.tagName === 'BUTTON') {
 
-        if (!el.hasAttribute('data-lb-click-bound')) {
+        if (!el.__lbClickBound) {
 
           el.addEventListener('click', function(e){ 
 
@@ -597,7 +597,7 @@ console.log('REST API endpoint:', REST_ROOT);
 
           });
 
-          el.setAttribute('data-lb-click-bound', '1');
+          el.__lbClickBound = true;
 
         }
 
@@ -2726,6 +2726,7 @@ case 'bg-image-section':
    clone.find('.lb-tools, .lb-pen').remove();
 
    clone.find('[data-lb-pen-attached]').removeAttr('data-lb-pen-attached');
+  clone.find('[data-lb-click-bound]').removeAttr('data-lb-click-bound');
 
    clone.find('.lb-editable-wrap').each(function(){
 
@@ -3005,6 +3006,69 @@ case 'bg-image-section':
 
  }
 
+
+ let lbCanvasObserver = null;
+ let lbReinitInProgress = false;
+
+ function lbDebounce(fn, wait) {
+   let t;
+   return function() {
+     clearTimeout(t);
+     t = setTimeout(fn, wait || 80);
+   };
+ }
+
+ function builderInitAfterTemplates(root) {
+   const scope = root || $canvas.get(0);
+   if (!scope || lbReinitInProgress) return;
+
+   lbReinitInProgress = true;
+   try {
+     if (typeof initBgVideos === 'function') {
+       try { initBgVideos(scope); } catch (e) {}
+     }
+
+     if (typeof addPencils === 'function') {
+       addPencils(scope);
+     }
+   } finally {
+     setTimeout(function(){ lbReinitInProgress = false; }, 60);
+   }
+ }
+
+ function startBuilderObserver() {
+   const root = $canvas.get(0);
+   if (!root || typeof MutationObserver === 'undefined') return;
+
+   if (lbCanvasObserver) {
+     lbCanvasObserver.disconnect();
+   }
+
+   const reinit = lbDebounce(function() {
+     builderInitAfterTemplates(root);
+   }, 120);
+
+   lbCanvasObserver = new MutationObserver(function(mutations) {
+     if (lbReinitInProgress) return;
+
+     const shouldReinit = mutations.some(function(m) {
+       if (m.type === 'childList') return true;
+       return m.attributeName === 'class' || m.attributeName === 'style';
+     });
+
+     if (shouldReinit) {
+       reinit();
+     }
+   });
+
+   lbCanvasObserver.observe(root, {
+     childList: true,
+     subtree: true,
+     attributes: true,
+     attributeFilter: ['class', 'style']
+   });
+ }
+
  
 
  // Load template
@@ -3105,12 +3169,6 @@ case 'bg-image-section':
 
        
 
-       // Add pencils to the entire canvas
-
-       addPencils($canvas.get(0));
-
-       
-
        // Ensure bg-video sections reload correctly
 
        $canvas.find('[data-edit="bg-video"]').each(function(){
@@ -3201,6 +3259,10 @@ case 'bg-image-section':
 
        initAccordions();
 
+      // Rebind edit handles only after template HTML has rendered.
+      builderInitAfterTemplates($canvas.get(0));
+      startBuilderObserver();
+
 
 
      } else {
@@ -3248,67 +3310,6 @@ case 'bg-image-section':
    }
 
  });
-
- // Keep edit handles attached after reloads and dynamic class/content updates.
- (function(){
-  const builderApp = document.getElementById('lb-app');
-  if (!builderApp) return;
-
-  function debounce(fn,wait){let t;return function(){clearTimeout(t);t=setTimeout(fn,wait||80)}}
-
-  let isRebinding = false;
-  function lbSafeInit(root){
-    if(typeof addPencils !== 'function' || isRebinding) return;
-    isRebinding = true;
-    try {
-      addPencils(root || document);
-    } finally {
-      setTimeout(function(){ isRebinding = false; }, 0);
-    }
-  }
-
-  function bootInit(){
-    lbSafeInit(document.querySelector('#lb-canvas') || document);
-  }
-
-  if(document.readyState!=='loading'){ bootInit(); }
-  else document.addEventListener('DOMContentLoaded', function(){ bootInit(); });
-
-  if(window.jQuery) jQuery(document).ready(function(){ bootInit(); });
-
-  const roots = Array.from(new Set([
-    document.querySelector('#lb-canvas'),
-    document.querySelector('.lb-builder-root'),
-    document.querySelector('main'),
-    document.body
-  ].filter(Boolean)));
-
-  roots.forEach(function(root){
-    const reinit = debounce(function(){ lbSafeInit(root); }, 120);
-    new MutationObserver(function(mutations){
-      if (isRebinding) return;
-
-      const shouldReinit = mutations.some(function(x){
-        if (x.type === 'childList') {
-          const nodes = []
-            .concat(Array.from(x.addedNodes || []))
-            .concat(Array.from(x.removedNodes || []));
-          return nodes.some(function(n){
-            return n.nodeType === 1 && !(n.classList && n.classList.contains('lb-pen'));
-          });
-        }
-        return x.attributeName === 'class' || x.attributeName === 'style';
-      });
-
-      if (shouldReinit) reinit();
-    }).observe(root,{
-      childList:true,
-      subtree:true,
-      attributes:true,
-      attributeFilter:['class','style']
-    });
-  });
- })();
 
 });
 
