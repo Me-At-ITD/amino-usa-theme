@@ -1,0 +1,56 @@
+/*
+Theme Name: Amino USA
+Theme URI: https://example.com/amino-usa
+Author: You
+Author URI: https://example.com
+Description: Ultra-light, builder-friendly WordPress theme with top bar, header, footer, and clean template hierarchy. Optimized for speed, CLS-free, and Woo-ready.
+Version: 1.0.0
+Requires at least: 6.0
+Tested up to: 6.6
+Requires PHP: 7.4
+Text Domain: amino-usa
+License: GNU General Public License v2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+
+:root{--container:1350px}
+html{scroll-behavior:smooth}
+*,*::before,*::after{box-sizing:border-box}
+a{
+  text-decoration: none !important;
+}
+body{margin:0;font-family: "Poppins", sans-serif !important;line-height:1.5; }
+img{max-width:100%;height:auto;display:block}
+.visually-hidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.container{max-width:var(--container);margin:0 auto;padding:0 1rem}
+div.content-third > p {color: #400080 !important;}
+.single-icon-box {text-align: -webkit-center;}
+/* Style Amino USA terms checkbox */
+.woocommerce .amino-terms-consent {
+    margin: 1em 0;
+}
+
+.woocommerce .amino-terms-consent input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-top: 3px;
+    margin-right: 8px;
+    vertical-align: top;
+    accent-color: #6a1b9a; /* Purple accent (matches your Register button) */
+    cursor: pointer;
+}
+
+.woocommerce .amino-terms-consent label {
+    display: flex;
+    align-items: flex-start;
+    font-size: 14px;
+    line-height: 1.5;
+    cursor: pointer;
+}
+
+.woocommerce .amino-terms-consent span {
+    display: inline-block;
+    max-width: 100%;
+}

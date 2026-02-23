@@ -1,0 +1,8 @@
+LightBuilder Theme — Improvements (2025-08-18)
+----------------------------------------------------
+- Added Global Styles section in Customizer (colors 1–6, body/heading fonts, base font size).
+- Injected CSS variables via wp_head for consistent site-wide styling.
+- Localized palette + fonts to Builder (available as LB_GLOBALS).
+- Builder UI panel (Elementor-like): tabs (Content/Style/Advanced), color swatches, font selector.
+- Enforced text-only editing via [data-lb-editable="text"] with paste as plain text.
+- Added utility CSS and fallback CSS variables.

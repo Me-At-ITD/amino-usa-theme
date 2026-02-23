@@ -1,0 +1,1 @@
+<div class='lb-card'><h2>Default Template</h2><p>Edit me in Light Builder.</p></div>
